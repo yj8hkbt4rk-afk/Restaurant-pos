@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TableFire — GitHub Uploader</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #16140F; color: #F2ECDD; font-family: Inter, sans-serif; padding: 24px; min-height: 100vh; }
+h1 { color: #D9622B; font-size: 22px; margin-bottom: 6px; }
+p { color: #9A9384; font-size: 13px; margin-bottom: 24px; }
+label { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #9A9384; margin-bottom: 6px; margin-top: 16px; }
+input, select { width: 100%; padding: 12px; border-radius: 6px; border: 1px solid #39332A; background: #201D17; color: #F2ECDD; font-size: 14px; font-family: inherit; outline: none; }
+button { width: 100%; padding: 14px; border-radius: 8px; border: none; background: #D9622B; color: #fff; font-size: 15px; font-weight: 700; cursor: pointer; margin-top: 20px; }
+button:disabled { background: #555; cursor: not-allowed; }
+.log { margin-top: 20px; background: #201D17; border: 1px solid #39332A; border-radius: 6px; padding: 14px; font-family: monospace; font-size: 13px; line-height: 1.8; max-height: 300px; overflow-y: auto; }
+.ok { color: #5C9D6E; }
+.err { color: #C73E3E; }
+.info { color: #9A9384; }
+.warn { color: #D9A12B; }
+textarea { width: 100%; padding: 12px; border-radius: 6px; border: 1px solid #39332A; background: #201D17; color: #F2ECDD; font-size: 12px; font-family: monospace; outline: none; min-height: 80px; }
+</style>
+</head>
+<body>
+<h1>🔥 TableFire — GitHub Uploader</h1>
+<p>Upload files directly to GitHub without renaming issues.</p>
+
+<label>GitHub Token</label>
+<input type="password" id="token" placeholder="ghp_xxxxxxxxxxxx" value="">
+
+<label>Repository (owner/repo)</label>
+<input id="repo" value="yj8hkbt4rk-afk/Restaurant-pos">
+
+<label>Branch</label>
+<input id="branch" value="main">
+
+<label>File path in repo (e.g. src/App.jsx)</label>
+<input id="filepath" placeholder="src/App.jsx">
+
+<label>Select file to upload</label>
+<input type="file" id="fileInput" accept="*/*">
+
+<button id="uploadBtn" onclick="upload()">Upload to GitHub</button>
+
+<div class="log" id="log" style="display:none"></div>
+
+<script>
+function log(msg, cls='info') {
+  const l = document.getElementById('log');
+  l.style.display = 'block';
+  l.innerHTML += `<div class="${cls}">${msg}</div>`;
+  l.scrollTop = l.scrollHeight;
+}
+
+async function upload() {
+  const token = document.getElementById('token').value.trim();
+  const repo = document.getElementById('repo').value.trim();
+  const branch = document.getElementById('branch').value.trim();
+  const filepath = document.getElementById('filepath').value.trim();
+  const file = document.getElementById('fileInput').files[0];
+  const btn = document.getElementById('uploadBtn');
+
+  if (!token || !repo || !filepath || !file) {
+    alert('Please fill in all fields and select a file');
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Uploading…';
+  document.getElementById('log').innerHTML = '';
+
+  log(`📁 File: ${file.name} (${(file.size/1024).toFixed(1)} KB)`);
+  log(`📍 Target: ${repo}/${filepath} @ ${branch}`);
+
+  try {
+    // Read file as base64
+    const base64 = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = e => resolve(e.target.result.split(',')[1]);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+
+    // Get current file SHA (needed to update existing file)
+    log('🔍 Checking if file exists…');
+    let sha = null;
+    const getRes = await fetch(`https://api.github.com/repos/${repo}/contents/${filepath}?ref=${branch}`, {
+      headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github.v3+json' }
+    });
+    if (getRes.ok) {
+      const existing = await getRes.json();
+      sha = existing.sha;
+      log(`✓ File exists (SHA: ${sha.slice(0,8)}…) — will overwrite`, 'ok');
+    } else if (getRes.status === 404) {
+      log('✓ File does not exist — will create new', 'ok');
+    } else {
+      throw new Error(`GitHub API error: ${getRes.status}`);
+    }
+
+    // Upload file
+    log('⬆️ Uploading…');
+    const body = {
+      message: `Update ${filepath}`,
+      content: base64,
+      branch: branch,
+    };
+    if (sha) body.sha = sha;
+
+    const putRes = await fetch(`https://api.github.com/repos/${repo}/contents/${filepath}`, {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/vnd.github.v3+json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!putRes.ok) {
+      const err = await putRes.json();
+      throw new Error(err.message || `Upload failed: ${putRes.status}`);
+    }
+
+    const result = await putRes.json();
+    log(`✅ SUCCESS! ${filepath} uploaded to GitHub`, 'ok');
+    log(`🚀 Vercel will redeploy automatically in ~30 seconds`, 'ok');
+    log(`📝 Commit: ${result.commit?.sha?.slice(0,8)}`, 'ok');
+
+  } catch(e) {
+    log(`❌ Error: ${e.message}`, 'err');
+  }
+
+  btn.disabled = false;
+  btn.textContent = 'Upload to GitHub';
+}
+
+// Auto-fill filepath from filename
+document.getElementById('fileInput').addEventListener('change', function() {
+  const file = this.files[0];
+  if (!file) return;
+  const name = file.name;
+  const pathMap = {
+    'App.jsx': 'src/App.jsx',
+    'main.jsx': 'src/main.jsx',
+    'CustomerApp.jsx': 'src/CustomerApp.jsx',
+    'OwnerDashboard.jsx': 'src/OwnerDashboard.jsx',
+    'DemoApp.jsx': 'src/DemoApp.jsx',
+    'StationApp.jsx': 'src/StationApp.jsx',
+    'storage.js': 'src/lib/storage.js',
+    'server-index.js': 'server/index.js',
+    'vercel.json': 'vercel.json',
+  };
+  if (pathMap[name]) {
+    document.getElementById('filepath').value = pathMap[name];
+  }
+});
+
+// Load saved token
+const saved = localStorage.getItem('gh_token');
+if (saved) document.getElementById('token').value = saved;
+document.getElementById('token').addEventListener('change', function() {
+  localStorage.setItem('gh_token', this.value);
+});
+</script>
+</body>
+</html>

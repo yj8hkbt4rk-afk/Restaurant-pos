@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>TableFire — Owner Dashboard</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root { --bg:#16140F; --panel:#201D17; --border:#39332A; --cream:#F2ECDD; --muted:#9A9384; --ember:#D9622B; --good:#5C9D6E; --urgent:#C73E3E; --warn:#D9A12B; }
+  body { background:var(--bg); color:var(--cream); font-family:Inter,sans-serif; padding:0; min-height:100vh; }
+  @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@600;700&family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@700&display=swap');
+  input,select { width:100%; padding:10px 12px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--cream); font-size:14px; font-family:inherit; outline:none; }
+  button { cursor:pointer; font-family:inherit; }
+  .btn { padding:10px 18px; border-radius:6px; border:none; font-weight:700; font-size:13px; display:inline-flex; align-items:center; gap:6px; }
+  .btn-primary { background:var(--ember); color:#fff; }
+  .btn-danger { background:var(--urgent); color:#fff; }
+  .btn-success { background:var(--good); color:#fff; }
+  .btn-ghost { background:transparent; border:1px solid var(--border); color:var(--muted); }
+  label { display:block; font-size:11px; text-transform:uppercase; letter-spacing:0.5px; color:var(--muted); margin-bottom:6px; margin-top:14px; }
+  .card { background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:20px; margin-bottom:16px; }
+  .badge { display:inline-block; padding:3px 10px; border-radius:10px; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; }
+  .badge-active { background:rgba(92,157,110,0.2); color:var(--good); }
+  .badge-expired { background:rgba(199,62,62,0.2); color:var(--urgent); }
+  .badge-disabled { background:rgba(154,147,132,0.2); color:var(--muted); }
+  .badge-trial { background:rgba(217,162,43,0.2); color:var(--warn); }
+  table { width:100%; border-collapse:collapse; }
+  th,td { text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:13px; }
+  th { color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:0.5px; font-weight:600; }
+  .mono { font-family:'JetBrains Mono',monospace; font-size:12px; }
+  .stat-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); gap:12px; margin-bottom:24px; }
+  .stat { background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:16px; text-align:center; }
+  .stat-num { font-family:'Oswald',sans-serif; font-size:32px; color:var(--ember); }
+  .stat-label { font-size:11px; color:var(--muted); margin-top:4px; text-transform:uppercase; letter-spacing:0.5px; }
+  #login-screen, #dashboard { padding:24px; max-width:1100px; margin:0 auto; }
+  .hidden { display:none !important; }
+  .copy-btn { background:none; border:1px solid var(--border); color:var(--muted); border-radius:4px; padding:2px 8px; font-size:11px; cursor:pointer; }
+  .copy-btn:hover { color:var(--cream); }
+  .flash { padding:10px 14px; border-radius:6px; font-size:13px; margin-bottom:16px; }
+  .flash-ok { background:rgba(92,157,110,0.15); border:1px solid rgba(92,157,110,0.4); color:var(--good); }
+  .flash-err { background:rgba(199,62,62,0.15); border:1px solid rgba(199,62,62,0.4); color:var(--urgent); }
+</style>
+</head>
+<body>
+
+<!-- Login -->
+<div id="login-screen" style="min-height:100vh;display:flex;align-items:center;justify-content:center;">
+  <div style="width:100%;max-width:340px;padding:24px;">
+    <div style="text-align:center;margin-bottom:32px;">
+      <div style="font-family:'Oswald',sans-serif;font-size:28px;letter-spacing:2px;color:var(--ember);text-transform:uppercase;">🔥 TableFire</div>
+      <div style="color:var(--muted);font-size:13px;margin-top:6px;">Owner Dashboard</div>
+    </div>
+    <label>Email</label>
+    <input type="email" id="login-email" placeholder="your@email.com" style="margin-bottom:12px"/>
+    <label>Password</label>
+    <input type="password" id="login-pass" placeholder="••••••••" style="margin-bottom:20px" onkeydown="if(event.key==='Enter')login()"/>
+    <div id="login-error" class="flash flash-err hidden"></div>
+    <button class="btn btn-primary" onclick="login()" style="width:100%;justify-content:center;padding:14px;font-size:15px;">Sign in</button>
+    <div style="margin-top:16px;font-size:12px;color:var(--muted);text-align:center;">
+      Set your email and password in Render environment variables:<br/>
+      <span class="mono">OWNER_EMAIL</span> and <span class="mono">OWNER_PASS</span>
+    </div>
+  </div>
+</div>
+
+<!-- Dashboard -->
+<div id="dashboard" class="hidden">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:28px;padding-bottom:16px;border-bottom:1px solid var(--border);">
+    <div>
+      <div style="font-family:'Oswald',sans-serif;font-size:24px;letter-spacing:2px;color:var(--ember);text-transform:uppercase;">🔥 TableFire</div>
+      <div style="color:var(--muted);font-size:13px;">Owner Dashboard</div>
+    </div>
+    <button class="btn btn-ghost" onclick="logout()">Sign out</button>
+  </div>
+
+  <div id="flash-msg" class="hidden"></div>
+
+  <!-- Stats -->
+  <div class="stat-grid" id="stats-grid"></div>
+
+  <!-- Add restaurant -->
+  <div class="card">
+    <div style="font-family:'Oswald',sans-serif;font-size:18px;letter-spacing:1px;text-transform:uppercase;margin-bottom:16px;">Add new restaurant</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;">
+      <div>
+        <label>Restaurant name *</label>
+        <input id="new-name" placeholder="e.g. Paro Kitchen"/>
+      </div>
+      <div>
+        <label>Owner email *</label>
+        <input id="new-email" type="email" placeholder="owner@restaurant.com"/>
+      </div>
+      <div>
+        <label>Domain (optional)</label>
+        <input id="new-domain" placeholder="e.g. parokitchen.vercel.app"/>
+      </div>
+      <div>
+        <label>Plan</label>
+        <select id="new-plan">
+          <option value="trial">30-day trial</option>
+          <option value="starter">Starter ($29/mo)</option>
+          <option value="restaurant">Restaurant ($59/mo)</option>
+          <option value="enterprise">Enterprise ($99/mo)</option>
+        </select>
+      </div>
+    </div>
+    <button class="btn btn-primary" onclick="addTenant()" style="margin-top:16px;">+ Add restaurant</button>
+  </div>
+
+  <!-- New license result -->
+  <div id="new-license-box" class="card hidden" style="border-color:var(--good);">
+    <div style="color:var(--good);font-weight:700;margin-bottom:12px;">✓ Restaurant added! Share this license key with them:</div>
+    <div style="display:flex;align-items:center;gap:10px;background:var(--bg);padding:12px 16px;border-radius:6px;">
+      <span id="new-license-key" class="mono" style="font-size:16px;color:var(--ember);flex:1;"></span>
+      <button class="copy-btn" onclick="copyKey()">Copy</button>
+    </div>
+    <div style="font-size:12px;color:var(--muted);margin-top:10px;">They paste this key into their Vercel environment variable: <span class="mono">VITE_LICENSE_KEY</span></div>
+  </div>
+
+  <!-- Tenants table -->
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <div style="font-family:'Oswald',sans-serif;font-size:18px;letter-spacing:1px;text-transform:uppercase;">All restaurants</div>
+      <button class="btn btn-ghost" onclick="loadTenants()" style="font-size:12px;">↻ Refresh</button>
+    </div>
+    <div style="overflow-x:auto;">
+      <table>
+        <thead>
+          <tr>
+            <th>Restaurant</th>
+            <th>Email</th>
+            <th>Plan</th>
+            <th>Status</th>
+            <th>Expires</th>
+            <th>Last seen</th>
+            <th>License key</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="tenants-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = prompt('Enter your backend URL (e.g. https://korean-restaurant-pos.onrender.com)') || '';
+let ownerToken = localStorage.getItem('tf_owner_token') || '';
+
+function flash(msg, ok=true) {
+  const el = document.getElementById('flash-msg');
+  el.className = 'flash ' + (ok ? 'flash-ok' : 'flash-err');
+  el.textContent = msg;
+  el.classList.remove('hidden');
+  setTimeout(() => el.classList.add('hidden'), 4000);
+}
+
+async function apiCall(path, opts={}) {
+  const res = await fetch(API + path, {
+    ...opts,
+    headers: { 'Content-Type':'application/json', 'x-owner-token': ownerToken, ...(opts.headers||{}) },
+    body: opts.body ? JSON.stringify(opts.body) : undefined,
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Error');
+  return data;
+}
+
+async function login() {
+  const email = document.getElementById('login-email').value;
+  const pass  = document.getElementById('login-pass').value;
+  const errEl = document.getElementById('login-error');
+  try {
+    const data = await apiCall('/platform/login', { method:'POST', body:{ email, password: pass } });
+    ownerToken = data.token;
+    localStorage.setItem('tf_owner_token', ownerToken);
+    document.getElementById('login-screen').classList.add('hidden');
+    document.getElementById('dashboard').classList.remove('hidden');
+    loadStats(); loadTenants();
+  } catch(e) {
+    errEl.textContent = e.message;
+    errEl.classList.remove('hidden');
+  }
+}
+
+function logout() {
+  localStorage.removeItem('tf_owner_token');
+  ownerToken = '';
+  document.getElementById('login-screen').classList.remove('hidden');
+  document.getElementById('dashboard').classList.add('hidden');
+}
+
+async function loadStats() {
+  try {
+    const s = await apiCall('/platform/stats');
+    document.getElementById('stats-grid').innerHTML = `
+      <div class="stat"><div class="stat-num">${s.total}</div><div class="stat-label">Total</div></div>
+      <div class="stat"><div class="stat-num" style="color:var(--good)">${s.active}</div><div class="stat-label">Active</div></div>
+      <div class="stat"><div class="stat-num" style="color:var(--urgent)">${s.expired}</div><div class="stat-label">Expired</div></div>
+      <div class="stat"><div class="stat-num" style="color:var(--muted)">${s.disabled}</div><div class="stat-label">Disabled</div></div>
+    `;
+  } catch {}
+}
+
+async function loadTenants() {
+  try {
+    const tenants = await apiCall('/platform/tenants');
+    const tbody = document.getElementById('tenants-tbody');
+    if (!tenants.length) { tbody.innerHTML = '<tr><td colspan="8" style="color:var(--muted);text-align:center;padding:24px;">No restaurants yet</td></tr>'; return; }
+    tbody.innerHTML = tenants.map(t => {
+      const expired = new Date(t.expiresAt) < new Date();
+      const status = !expired ? 'active' : 'expired';
+      const badge = expired ? 'badge-expired' : t.plan==='trial' ? 'badge-trial' : 'badge-active';
+      const daysLeft = Math.ceil((new Date(t.expiresAt)-Date.now())/86400000);
+      return `<tr>
+        <td style="font-weight:600">${t.name}</td>
+        <td style="color:var(--muted)">${t.email}</td>
+        <td><span class="badge badge-trial">${t.plan}</span></td>
+        <td><span class="badge ${badge}">${expired?'expired':'active'}</span></td>
+        <td style="color:${daysLeft<7?'var(--urgent)':daysLeft<30?'var(--warn)':'var(--muted)'}">${new Date(t.expiresAt).toLocaleDateString()} ${daysLeft>0?'('+daysLeft+'d)':''}</td>
+        <td style="color:var(--muted)">${t.lastCheckin?new Date(t.lastCheckin).toLocaleDateString():'Never'}</td>
+        <td class="mono" style="color:var(--ember)">${'••••••••••••'}</td>
+        <td>
+          <button class="btn btn-success" style="padding:5px 10px;font-size:11px;margin-right:4px;" onclick="extend('${t.id}')">+30d</button>
+          <button class="btn btn-danger" style="padding:5px 10px;font-size:11px;" onclick="disable('${t.id}')">Disable</button>
+        </td>
+      </tr>`;
+    }).join('');
+  } catch(e) { flash(e.message, false); }
+}
+
+async function addTenant() {
+  const name   = document.getElementById('new-name').value.trim();
+  const email  = document.getElementById('new-email').value.trim();
+  const domain = document.getElementById('new-domain').value.trim();
+  const plan   = document.getElementById('new-plan').value;
+  if (!name || !email) { flash('Name and email required', false); return; }
+  try {
+    const data = await apiCall('/platform/tenants', { method:'POST', body:{ name, email, domain, plan } });
+    document.getElementById('new-license-key').textContent = data.licenseKey;
+    document.getElementById('new-license-box').classList.remove('hidden');
+    document.getElementById('new-name').value = '';
+    document.getElementById('new-email').value = '';
+    document.getElementById('new-domain').value = '';
+    loadTenants(); loadStats();
+    flash('Restaurant added successfully!');
+  } catch(e) { flash(e.message, false); }
+}
+
+async function extend(id) {
+  const newExpiry = new Date(Date.now() + 30*24*60*60*1000).toISOString();
+  try { await apiCall(`/platform/tenants/${id}`, { method:'PATCH', body:{ expiresAt: newExpiry, active: true } }); loadTenants(); flash('Extended by 30 days'); }
+  catch(e) { flash(e.message, false); }
+}
+
+async function disable(id) {
+  if (!confirm('Disable this restaurant? Their app will stop working.')) return;
+  try { await apiCall(`/platform/tenants/${id}`, { method:'PATCH', body:{ active: false } }); loadTenants(); flash('Restaurant disabled'); }
+  catch(e) { flash(e.message, false); }
+}
+
+function copyKey() {
+  navigator.clipboard.writeText(document.getElementById('new-license-key').textContent);
+  flash('License key copied!');
+}
+
+// Auto-login if token exists
+if (ownerToken) {
+  document.getElementById('login-screen').classList.add('hidden');
+  document.getElementById('dashboard').classList.remove('hidden');
+  loadStats(); loadTenants();
+}
+</script>
+</body>
+</html>
